@@ -1,0 +1,1866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tantu Bamboo Crafts GST &amp; Tax Tracker</title>
+    <meta name="description" content="Smartphone-first GST Invoice Generator and Google Sheets Monthly Tax Tracker for Tantu Bamboo Crafts.">
+    <meta property="og:title" content="Tantu Bamboo Crafts GST &amp; Tax Tracker">
+    <meta property="og:description" content="Smartphone-first GST Invoice Generator and Google Sheets Monthly Tax Tracker for Tantu Bamboo Crafts.">
+    <meta property="og:type" content="website">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@500;700&amp;display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+        /* Mobile scaled preview wrapper */
+        #preview-scaler-container {
+            width: 100%;
+            overflow: hidden;
+            position: relative;
+            background: #cbd5e1;
+            border-radius: 0.75rem;
+            display: flex;
+            justify-content: center;
+        }
+
+        #invoice-preview-wrap {
+            transform-origin: top center;
+            transition: transform 0.15s ease-out;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.25);
+        }
+
+        /* Clean crisp A4 Invoice Base Style */
+        .invoice-a4-base {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 16mm 18mm;
+            background: #ffffff;
+            box-sizing: border-box;
+            color: #0f172a;
+        }
+
+        /* PRINT CLEAN ENGINE: Prints only full size A4 clone */
+        #print-export-host { display: none; }
+
+        @media print {
+            html, body {
+                background: #ffffff !important;
+                width: auto !important;
+                height: auto !important;
+                min-height: 0 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: visible !important;
+            }
+
+            body.printing-invoice > *:not(#print-export-host) {
+                display: none !important;
+            }
+
+            #print-export-host {
+                display: block !important;
+                position: static !important;
+                width: 100% !important;
+                height: auto !important;
+                min-height: 0 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: visible !important;
+                background: #ffffff !important;
+            }
+
+            #print-export-host .invoice-output-copy {
+                transform: none !important;
+                margin: 0 auto !important;
+                min-height: 0 !important;
+                height: auto !important;
+                max-height: none !important;
+                overflow: visible !important;
+                box-shadow: none !important;
+                border: none !important;
+                box-sizing: border-box !important;
+            }
+
+            #print-export-host tr {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+            }
+
+            .no-print { display: none !important; }
+            @page { size: A4 portrait; margin: 0; }
+        }
+
+        /* Toast slide animation */
+        @keyframes toastSlide {
+            from { transform: translate(-50%, -100%); opacity: 0; }
+            to { transform: translate(-50%, 0); opacity: 1; }
+        }
+        .animate-toast {
+            animation: toastSlide 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        /* Smooth scrollbar styling for tables */
+        .custom-scroll::-webkit-scrollbar {
+            height: 4px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background-color: #cbd5e1;
+            border-radius: 9999px;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased min-h-screen flex flex-col pb-24">
+
+    <!-- Top Toast Notification Banner (Centered on Mobile) -->
+    <div id="toast-banner" class="fixed top-3 left-1/2 -translate-x-1/2 z-50 hidden max-w-[92vw] w-full max-w-sm pointer-events-none">
+        <div id="toast-content" class="px-4 py-3 rounded-2xl shadow-xl flex items-center justify-between border text-xs font-bold pointer-events-auto">
+            <div class="flex items-center gap-2.5">
+                <span id="toast-icon" class="text-base">&#x2713;</span>
+                <span id="toast-message" class="leading-tight">Notification text</span>
+            </div>
+            <button onclick="hideToast()" class="ml-2 text-slate-300 hover:text-white p-1">&#x2715;</button>
+        </div>
+    </div>
+
+    <!-- Top App Bar -->
+    <header class="bg-emerald-800 text-white sticky top-0 z-40 shadow-sm no-print">
+        <div class="max-w-md mx-auto px-4 h-14 flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-emerald-700 border border-emerald-600 flex items-center justify-center text-base">
+                    &#x1F38B;
+                </div>
+                <div>
+                    <h1 class="text-sm font-extrabold tracking-tight leading-none">TANTU Bamboo Crafts</h1>
+                    <p class="text-[10px] text-emerald-200 font-mono mt-0.5">GSTIN: 29FUEPM7101R1ZY</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-1.5">
+                <span id="sheet-sync-pill" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-900/80 text-emerald-300 border border-emerald-600/50 flex items-center gap-1">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    Sheets Ready
+                </span>
+            </div>
+        </div>
+
+        <!-- 2-Tab Segmented Switcher -->
+        <div class="max-w-md mx-auto px-3 pb-2 pt-1">
+            <div class="grid grid-cols-2 bg-emerald-900/60 p-1 rounded-xl text-xs font-bold border border-emerald-700/60">
+                <button id="tab-btn-create" onclick="switchTab('create')" class="py-2 rounded-lg text-center transition-all bg-white text-emerald-900 shadow-sm">
+                    &#x270D;&#xFE0F; Create Bill
+                </button>
+                <button id="tab-btn-transport" onclick="switchTab('transport')" class="py-2 rounded-lg text-center transition-all text-emerald-200 hover:text-white">
+                    &#x1F69A; Transport Entry
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT CONTAINER (360px - 430px smartphone optimized) -->
+    <main class="max-w-md mx-auto w-full px-3 pt-3 flex-1">
+
+        <!-- ========================================================= -->
+        <!-- TAB 1: CREATE BILL -->
+        <!-- ========================================================= -->
+        <div id="tab-create-bill" class="space-y-3">
+            
+            <!-- Quick View Toggle: Edit Form vs Live A4 Preview -->
+            <div class="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-xs">
+                <span class="text-xs font-bold text-slate-700">Mobile Invoice View:</span>
+                <div class="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg text-[11px] font-semibold">
+                    <button id="mode-btn-form" onclick="toggleMobileView('form')" class="px-2.5 py-1 rounded-md bg-white text-emerald-800 shadow-xs">
+                        Input Form
+                    </button>
+                    <button id="mode-btn-preview" onclick="toggleMobileView('preview')" class="px-2.5 py-1 rounded-md text-slate-600">
+                        Live Preview
+                    </button>
+                </div>
+            </div>
+
+            <!-- COMPACT INPUT FORM -->
+            <div id="form-container" class="space-y-3">
+                
+                <!-- Card 1: Invoice Number & Date (Compact 2-col) -->
+                <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+                    <div class="grid grid-cols-2 gap-2.5">
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Invoice No *</label>
+                            <input type="text" id="inv-number" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="TBC-OCT-001" oninput="updatePreview()">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Invoice Date *</label>
+                            <input type="date" id="inv-date" class="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" onchange="onDateChanged()">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 2: Customer Selection (Dropdown Only + Tax Type) -->
+                <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+                    <div class="flex items-center justify-between">
+                        <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Customer (Buyer)</label>
+                        <button type="button" onclick="openAddCustomerModal()" class="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 flex items-center gap-1 active:scale-95">
+                            + Add New
+                        </button>
+                    </div>
+
+                    <!-- Customer Dropdown -->
+                    <div>
+                        <select id="customer-select" class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" onchange="onCustomerSelect(this.value)">
+                            <!-- Populated with required customers via JS -->
+                        </select>
+                    </div>
+
+                    <!-- Auto-filled customer summary chips -->
+                    <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-[11px] space-y-1">
+                        <div class="flex items-center justify-between text-slate-700">
+                            <span class="text-slate-400 font-medium">Phone:</span>
+                            <span id="disp-c-phone" class="font-mono font-semibold">7013801913</span>
+                        </div>
+                        <div class="flex items-start justify-between text-slate-700 gap-2">
+                            <span class="text-slate-400 font-medium shrink-0">Address:</span>
+                            <span id="disp-c-address" class="text-right font-medium text-slate-800">Gulbarga, Karnataka - 585104</span>
+                        </div>
+                        <div class="flex items-center justify-between text-slate-700 pt-1 border-t border-slate-200/60">
+                            <span class="text-slate-400 font-medium">GSTIN:</span>
+                            <span class="font-mono font-bold text-emerald-800 bg-emerald-100/70 px-1.5 py-0.5 rounded text-[10px]">URP (Hardcoded)</span>
+                        </div>
+                    </div>
+
+                    <!-- Tax Type Dropdown -->
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">GST Tax Type</label>
+                        <select id="inv-gst-type" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500" onchange="calculateInvoice()">
+                            <option value="intra">Intra-State Karnataka (CGST 2.5% + SGST 2.5%)</option>
+                            <option value="inter">Inter-State (IGST 5.0%)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Card 3: Simplified Line Items -->
+                <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Line Items</span>
+                            <span class="text-[10px] font-bold text-emerald-700 ml-1">(5% GST Fixed)</span>
+                        </div>
+                        <button type="button" onclick="addInvoiceItem()" class="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 flex items-center gap-1 active:scale-95">
+                            + Add Item
+                        </button>
+                    </div>
+
+                    <div id="item-form-container" class="space-y-2.5">
+                        <!-- Populated with item rows containing 3 controls: Name Dropdown, Qty, Rate -->
+                    </div>
+
+                    <!-- Quick Invoice Live Math Summary Bar -->
+                    <div class="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3 text-xs space-y-1.5">
+                        <div class="flex justify-between text-slate-600">
+                            <span>Subtotal:</span>
+                            <span id="quick-subtotal" class="font-mono font-semibold">&#x20B9;4,000.00</span>
+                        </div>
+                        <div class="flex justify-between text-slate-600">
+                            <span id="quick-tax-label">CGST (2.5%) + SGST (2.5%):</span>
+                            <span id="quick-tax" class="font-mono font-semibold">&#x20B9;200.00</span>
+                        </div>
+                        <div class="flex justify-between text-sm font-extrabold text-emerald-950 pt-1 border-t border-emerald-200">
+                            <span>Grand Total:</span>
+                            <span id="quick-total" class="font-mono text-emerald-800 text-base">&#x20B9;4,200.00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RESPONSIVE LIVE PREVIEW CARD (Visible on Preview mode or can be toggled) -->
+            <div id="preview-section" class="hidden space-y-2">
+                <div class="flex items-center justify-between px-1 text-xs font-bold text-slate-600">
+                    <span>A4 Document Preview</span>
+                    <span class="text-[10px] text-slate-400 font-normal">Auto-scaled for mobile</span>
+                </div>
+
+                <!-- Outer container that clamps to 100% mobile width -->
+                <div id="preview-scaler-container" class="border border-slate-300 p-2 shadow-inner">
+                    <div id="invoice-preview-wrap">
+                        
+                        <!-- Crisp A4 Template: Locked Seller Details, Hardcoded Signatory Manteshetty, Clean Table -->
+                        <div id="invoice-preview" class="invoice-a4-base text-slate-900 shadow-md">
+                            
+                            <!-- Invoice Header -->
+                            <div class="flex justify-between items-start border-b-2 border-slate-800 pb-5 mb-5">
+                                <div>
+                                    <h1 class="text-2xl font-black tracking-tight text-slate-900">TANTU BAMBOO CRAFTS</h1>
+                                    <p class="text-xs font-bold text-emerald-800 font-mono mt-0.5">GSTIN: 29FUEPM7101R1ZY</p>
+                                    <p class="text-xs text-slate-600 mt-1 leading-snug">
+                                        Medar street, Nagavalli, Chamarajanagara, Karnataka - 571342<br>
+                                        Phone: +91 7353127983
+                                    </p>
+                                </div>
+                                <div class="text-right">
+                                    <h2 class="text-3xl font-light text-slate-400 uppercase tracking-wider mb-1">TAX INVOICE</h2>
+                                    <p class="text-xs text-slate-500">Invoice No: <span id="p-inv-number" class="font-mono font-bold text-slate-900">TBC-OCT-001</span></p>
+                                    <p class="text-xs text-slate-500">Date: <span id="p-inv-date" class="font-semibold text-slate-900">2026-10-27</span></p>
+                                </div>
+                            </div>
+
+                            <!-- Customer Bill To Info (GSTIN permanently URP) -->
+                            <div class="grid grid-cols-2 gap-4 mb-6 bg-slate-50 p-4 rounded-lg border border-slate-200 text-xs">
+                                <div>
+                                    <h4 class="font-bold text-slate-500 uppercase tracking-wider text-[10px] mb-1">Bill To (Customer):</h4>
+                                    <p id="p-c-name" class="font-bold text-slate-900 text-sm">Y Nagesh (Gulbarga)</p>
+                                    <p class="font-mono font-semibold text-emerald-800 mt-0.5">GSTIN: URP</p>
+                                    <p id="p-c-address" class="text-slate-600 mt-1 leading-relaxed">Gulbarga, Karnataka - 585104</p>
+                                    <p id="p-c-phone" class="text-slate-600">Ph: 7013801913</p>
+                                </div>
+                                <div class="text-right flex flex-col justify-between">
+                                    <div>
+                                        <h4 class="font-bold text-slate-500 uppercase tracking-wider text-[10px] mb-1">Place of Supply:</h4>
+                                        <p id="p-place-supply" class="font-semibold text-slate-800">Karnataka (29)</p>
+                                    </div>
+                                    <p class="text-[10px] text-slate-400">Reverse Charge (RCM): No</p>
+                                </div>
+                            </div>
+
+                            <!-- Line Items Table -->
+                            <table class="w-full text-left border-collapse text-xs mb-6">
+                                <thead>
+                                    <tr class="bg-slate-900 text-white uppercase font-bold tracking-wider text-[11px]">
+                                        <th class="p-2.5 rounded-l">Item Name</th>
+                                        <th class="p-2.5 text-right">Qty</th>
+                                        <th class="p-2.5 text-right">Rate</th>
+                                        <th class="p-2.5 text-right">GST %</th>
+                                        <th id="p-th-tax" class="p-2.5 text-right">CGST + SGST</th>
+                                        <th class="p-2.5 text-right rounded-r">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="p-table-body" class="divide-y divide-slate-200">
+                                    <!-- Rendered dynamically -->
+                                </tbody>
+                            </table>
+
+                            <!-- Subtotals & Tax Breakdown -->
+                            <div class="grid grid-cols-12 gap-4 text-xs mb-8">
+                                <div class="col-span-6 space-y-3">
+                                    <div>
+                                        <span class="font-bold text-slate-500 block mb-0.5">Amount in Words:</span>
+                                        <span id="p-amt-words" class="italic text-slate-800 font-semibold leading-relaxed">Four Thousand Two Hundred Rupees Only</span>
+                                    </div>
+                                </div>
+                                <div class="col-span-6 text-right space-y-1.5 ml-auto w-full max-w-xs">
+                                    <div class="flex justify-between border-b border-slate-100 pb-1 text-slate-600">
+                                        <span>Taxable Subtotal:</span>
+                                        <span id="p-subtotal" class="font-mono font-semibold">&#x20B9;4,000.00</span>
+                                    </div>
+                                    <div id="p-cgst-row" class="flex justify-between border-b border-slate-100 pb-1 text-slate-600">
+                                        <span>CGST (2.5%):</span>
+                                        <span id="p-cgst" class="font-mono font-semibold">&#x20B9;100.00</span>
+                                    </div>
+                                    <div id="p-sgst-row" class="flex justify-between border-b border-slate-100 pb-1 text-slate-600">
+                                        <span>SGST (2.5%):</span>
+                                        <span id="p-sgst" class="font-mono font-semibold">&#x20B9;100.00</span>
+                                    </div>
+                                    <div id="p-igst-row" class="flex justify-between border-b border-slate-100 pb-1 text-slate-600 hidden">
+                                        <span>IGST (5.0%):</span>
+                                        <span id="p-igst" class="font-mono font-semibold">&#x20B9;200.00</span>
+                                    </div>
+                                    <div class="flex justify-between text-base font-black text-slate-900 pt-1 border-t-2 border-slate-800">
+                                        <span>Grand Total:</span>
+                                        <span id="p-total" class="font-mono text-emerald-800">&#x20B9;4,200.00</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Permanent Hardcoded Authorized Signatory: Manteshetty -->
+                            <div class="mt-16 pt-6 border-t border-slate-200 flex justify-between items-end text-xs">
+                                <div class="text-slate-400 italic text-[11px]">
+                                    Thank you for your business! Handcrafted Bamboo Products.
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-slate-500 mb-8 font-semibold">For TANTU Bamboo Crafts</p>
+                                    <p class="font-extrabold border-t border-slate-400 pt-1 text-slate-900 min-w-[150px] text-center text-sm">
+                                        Manteshetty
+                                    </p>
+                                    <p class="text-[10px] text-slate-400 text-center uppercase tracking-wider">Authorized Signatory</p>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div> <!-- end tab-create-bill -->
+
+        <!-- ========================================================= -->
+        <!-- TAB 2: TRANSPORT ENTRY -->
+        <!-- ========================================================= -->
+        <div id="tab-transport" class="hidden space-y-4">
+
+            <!-- Header -->
+            <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-sm font-extrabold text-slate-800 flex items-center gap-2">&#x1F69A; Transport Entry</h2>
+                        <p class="text-[11px] text-slate-500 mt-0.5">Add transport bill &amp; tax for saved invoices</p>
+                    </div>
+                    <button id="transport-refresh-btn" onclick="fetchTransportInvoices()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 active:scale-95 shadow-xs">
+                        <span id="transport-refresh-icon">&#x1F504;</span> Fetch
+                    </button>
+                </div>
+                <p id="transport-fetch-status" class="text-[10px] text-slate-400 mt-1.5">Click Fetch to load invoices from Google Sheets</p>
+            </div>
+
+            <!-- Invoice Selector -->
+            <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Select Invoice (Missing Transport Data)</label>
+                <select id="transport-invoice-select" onchange="onTransportInvoiceSelected()" class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-xs bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    <option value="">-- Fetch invoices first --</option>
+                </select>
+
+                <!-- Selected Invoice Details -->
+                <div id="transport-invoice-details" class="hidden bg-slate-50 rounded-xl p-3 border border-slate-200 space-y-1.5">
+                    <div class="flex justify-between text-xs">
+                        <span class="text-slate-500">Invoice:</span>
+                        <span id="transport-inv-number" class="font-bold text-slate-800 font-mono">&#x2014;</span>
+                    </div>
+                    <div class="flex justify-between text-xs">
+                        <span class="text-slate-500">Date:</span>
+                        <span id="transport-inv-date" class="font-semibold text-slate-700">&#x2014;</span>
+                    </div>
+                    <div class="flex justify-between text-xs">
+                        <span class="text-slate-500">Customer:</span>
+                        <span id="transport-inv-customer" class="font-semibold text-slate-700">&#x2014;</span>
+                    </div>
+                    <div class="flex justify-between text-xs">
+                        <span class="text-slate-500">Invoice Total:</span>
+                        <span id="transport-inv-total" class="font-black text-emerald-700">&#x2014;</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Transport Amount Entry -->
+            <div id="transport-form-section" class="hidden bg-white p-4 rounded-2xl border-2 border-amber-300 shadow-xs space-y-3">
+                <h3 class="text-xs font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
+                    &#x1F4E6; Transport Bill Details
+                </h3>
+
+                <div>
+                    <label class="text-[10px] font-bold text-slate-500 uppercase">Transport Bill Amount (&#x20B9;)</label>
+                    <input type="number" id="transport-bill-amount" oninput="calculateTransportTax()" placeholder="e.g. 4670" min="0" step="0.01"
+                        class="w-full mt-1 px-3 py-2.5 border-2 border-amber-300 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 bg-amber-50/50">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-[10px] font-bold text-slate-500 uppercase">CGST 2.5% (&#x20B9;)</label>
+                        <input type="text" id="transport-cgst-display" readonly
+                            class="w-full mt-1 px-3 py-2.5 bg-slate-100 border border-slate-300 rounded-xl text-sm font-bold text-slate-700" value="0.00">
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-bold text-slate-500 uppercase">SGST 2.5% (&#x20B9;)</label>
+                        <input type="text" id="transport-sgst-display" readonly
+                            class="w-full mt-1 px-3 py-2.5 bg-slate-100 border border-slate-300 rounded-xl text-sm font-bold text-slate-700" value="0.00">
+                    </div>
+                </div>
+
+                <!-- Total Transport Tax -->
+                <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center justify-between">
+                    <span class="text-xs font-bold text-amber-800">Total Transport Tax</span>
+                    <span id="transport-total-tax" class="text-lg font-black text-amber-700">&#x20B9;0.00</span>
+                </div>
+
+                <!-- Save Button -->
+                <button id="transport-save-btn" onclick="saveTransportData()" class="w-full py-3 bg-amber-600 hover:bg-amber-700 active:scale-98 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-md transition">
+                    <span id="transport-save-icon">&#x1F4BE;</span>
+                    <span id="transport-save-text">Save Transport to Sheets</span>
+                </button>
+            </div>
+
+            <!-- Already Filled Invoices List -->
+            <div id="transport-filled-section" class="hidden bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+                <div class="px-3.5 py-3 border-b border-slate-100 flex items-center justify-between">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-800">&#x2705; Invoices With Transport Data</h3>
+                    <span id="transport-filled-count" class="text-[11px] font-mono text-emerald-600 font-bold">0</span>
+                </div>
+                <div id="transport-filled-list" class="divide-y divide-slate-100 text-xs max-h-60 overflow-y-auto"></div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- ========================================================= -->
+    <!-- STICKY BOTTOM ACTION BAR (Mobile Optimized) -->
+    <!-- ========================================================= -->
+    <div id="sticky-bottom-bar" class="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 p-2.5 shadow-lg no-print">
+        <div class="max-w-md mx-auto grid grid-cols-12 gap-2">
+            <!-- Primary Button: Save to Sheets & Download PDF -->
+            <button id="save-and-download-btn" onclick="saveToSheetsAndDownloadPDF()" class="col-span-8 bg-emerald-700 hover:bg-emerald-800 active:scale-98 text-white py-3 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition">
+                <span id="save-pdf-icon">&#x1F4E5;</span>
+                <span id="save-pdf-text" class="truncate">Save &amp; Download PDF</span>
+            </button>
+
+            <!-- Secondary Button: Save to Sheets Only -->
+            <button id="save-only-btn" onclick="saveToGoogleSheets(false)" class="col-span-4 bg-slate-100 hover:bg-slate-200 active:scale-98 text-slate-800 py-3 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1 border border-slate-300 transition">
+                <span>&#x1F4D7;</span>
+                <span id="save-only-text" class="truncate">Save Only</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- MODAL: ADD NEW CUSTOMER -->
+    <!-- ========================================================= -->
+    <div id="customer-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-3 hidden">
+        <div class="bg-white rounded-2xl w-full max-w-sm p-4 space-y-3.5 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                <h3 class="text-sm font-bold text-slate-900">+ Add New Customer</h3>
+                <button type="button" onclick="closeAddCustomerModal()" class="text-slate-400 hover:text-slate-600 text-lg leading-none">&#x2715;</button>
+            </div>
+            
+            <div class="space-y-2.5 text-xs">
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Customer / Shop Name *</label>
+                    <input type="text" id="new-c-name" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g. Ramesh Handlooms">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Phone Number *</label>
+                    <input type="text" id="new-c-phone" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="9876543210">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Full Address &amp; State *</label>
+                    <textarea id="new-c-address" rows="2" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="City, District, State - Pincode"></textarea>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Default Tax Type</label>
+                    <select id="new-c-tax" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <option value="intra">Intra-State Karnataka (CGST + SGST)</option>
+                        <option value="inter">Inter-State Outside Karnataka (IGST)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2 pt-1">
+                <button type="button" onclick="closeAddCustomerModal()" class="w-1/2 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50">
+                    Cancel
+                </button>
+                <button type="button" onclick="saveNewCustomer()" class="w-1/2 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold shadow-xs">
+                    Save Customer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- JAVASCRIPT LOGIC -->
+    <!-- ========================================================= -->
+    <script>
+        // HARDCODED GOOGLE APPS SCRIPT WEB APP URL (Exact as requested)
+        const SHEETS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycby3fNJBv6oBCxQlGUfpC2QuyN6w9_VsDwpKWl0SEQjWVdJtz2VR5C63WWVfdIMWM-bRuw/exec";
+
+        // TRANSPORT UPDATER: Separate standalone Apps Script deployment
+        // >>> PASTE YOUR NEW TRANSPORT SCRIPT URL BELOW <<<
+        const TRANSPORT_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzUaiXILTLsqPw2obnxOxRTtN4bq-XE2MlzO-wj5vqPjC6kzGfQNIErtmr4QEN-hXCg/exec";
+
+        // Local storage keys
+        const CUSTOMERS_KEY = "TANTU_CUSTOMERS_LIST_V3";
+        const SAVED_INVOICES_KEY = "TANTU_LOCAL_SHEETS_INVOICES_V4";
+        const CURRENT_STATE_KEY = "TANTU_BILL_STATE_V3";
+
+        // Hardcoded preloaded customers with specified details
+        const DEFAULT_CUSTOMERS = [
+            {
+                id: "cust-1",
+                name: "Y Nagesh (Gulbarga)",
+                address: "Gulbarga, Karnataka - 585104",
+                phone: "7013801913",
+                taxType: "intra"
+            },
+            {
+                id: "cust-2",
+                name: "Y Nagesh (Bijapura)",
+                address: "Bijapura, Karnataka - 586101",
+                phone: "7013801913",
+                taxType: "intra"
+            },
+            {
+                id: "cust-3",
+                name: "Y Nagesh (Jewagri)",
+                address: "Jewagri, Karnataka - 585310",
+                phone: "7013801913",
+                taxType: "intra"
+            },
+            {
+                id: "cust-4",
+                name: "Y Nagesh (Sindagi)",
+                address: "Sindagi, Karnataka - 586128",
+                phone: "7013801913",
+                taxType: "intra"
+            },
+            {
+                id: "cust-5",
+                name: "Raosaheb",
+                address: "Ahmednagar, Maharashtra - 414401",
+                phone: "9561948803",
+                taxType: "inter"
+            },
+            {
+                id: "cust-6",
+                name: "Umakant Govind Manchal",
+                address: "Solapur, Maharashtra - 413255",
+                phone: "9665294352",
+                taxType: "inter"
+            },
+            {
+                id: "cust-7",
+                name: "Ajit Hari Wadtile",
+                address: "Pandharpur, Solapur, Maharashtra - 413304",
+                phone: "8857857888",
+                taxType: "inter"
+            },
+            {
+                id: "cust-8",
+                name: "Y Nagesh (Satara)",
+                address: "Satara, Maharashtra - 415002",
+                phone: "7013801913",
+                taxType: "inter"
+            },
+            {
+                id: "cust-9",
+                name: "Y Nagesh (Bidar)",
+                address: "Bidar, Karnataka - 585401",
+                phone: "7013801913",
+                taxType: "intra"
+            },
+            {
+                id: "cust-10",
+                name: "Jyothi",
+                address: "Solapur, Maharashtra - 413002",
+                phone: "9370702202",
+                taxType: "inter"
+            }
+        ];
+
+        // Preloaded items
+        const PRELOADED_ITEMS = [
+            "Bamboo Mora"
+        ];
+
+        let customersList = [];
+        let invoiceItems = [
+            { name: "Bamboo Mora", qty: 2, rate: 2000 }
+        ];
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initCustomers();
+            initDefaultBill();
+            renderItemForms();
+            calculateInvoice();
+            setupAutoPreviewScaling();
+        });
+
+        window.addEventListener('resize', () => {
+            fitPreviewToMobile();
+        });
+
+
+        // Toggle between Input Form and Live Preview on mobile
+        function toggleMobileView(mode) {
+            const btnForm = document.getElementById('mode-btn-form');
+            const btnPreview = document.getElementById('mode-btn-preview');
+            const formSec = document.getElementById('form-container');
+            const prevSec = document.getElementById('preview-section');
+
+            if (mode === 'form') {
+                btnForm.className = "px-2.5 py-1 rounded-md bg-white text-emerald-800 shadow-xs";
+                btnPreview.className = "px-2.5 py-1 rounded-md text-slate-600";
+                formSec.classList.remove('hidden');
+                prevSec.classList.add('hidden');
+            } else {
+                btnPreview.className = "px-2.5 py-1 rounded-md bg-white text-emerald-800 shadow-xs";
+                btnForm.className = "px-2.5 py-1 rounded-md text-slate-600";
+                formSec.classList.add('hidden');
+                prevSec.classList.remove('hidden');
+                setTimeout(fitPreviewToMobile, 50);
+            }
+        }
+
+        // Auto scale the 210mm A4 invoice preview to fit nicely inside the mobile phone container
+        function setupAutoPreviewScaling() {
+            setTimeout(fitPreviewToMobile, 100);
+        }
+
+        function fitPreviewToMobile() {
+            const container = document.getElementById('preview-scaler-container');
+            const wrap = document.getElementById('invoice-preview-wrap');
+            const preview = document.getElementById('invoice-preview');
+            if (!container || !wrap || !preview) return;
+
+            const containerWidth = container.clientWidth - 16;
+            const a4WidthPx = preview.offsetWidth || 794; // 210mm is approx 794px at 96dpi
+
+            if (containerWidth > 0 && a4WidthPx > 0) {
+                const scale = containerWidth / a4WidthPx;
+                wrap.style.transform = `scale(${scale})`;
+                wrap.style.width = `${a4WidthPx}px`;
+                // Adjust container height to match scaled preview
+                const a4HeightPx = preview.offsetHeight || 1123;
+                container.style.height = `${Math.ceil(a4HeightPx * scale) + 16}px`;
+            }
+        }
+
+        // Customers List Management
+        function initCustomers() {
+            try {
+                const stored = localStorage.getItem(CUSTOMERS_KEY);
+                if (stored) {
+                    customersList = JSON.parse(stored);
+                    // Merge any new default customers that aren't already in the list
+                    DEFAULT_CUSTOMERS.forEach(dc => {
+                        if (!customersList.some(c => c.id === dc.id)) {
+                            customersList.push(dc);
+                        }
+                    });
+                    localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(customersList));
+                } else {
+                    customersList = [...DEFAULT_CUSTOMERS];
+                    localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(customersList));
+                }
+            } catch (e) {
+                customersList = [...DEFAULT_CUSTOMERS];
+            }
+            populateCustomerDropdown();
+        }
+
+        function populateCustomerDropdown(selectedId = null) {
+            const select = document.getElementById('customer-select');
+            select.innerHTML = '';
+
+            customersList.forEach((c) => {
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = `${c.name} (${c.taxType === 'inter' ? 'IGST' : 'CGST+SGST'})`;
+                select.appendChild(opt);
+            });
+
+            // Add custom write-in option
+            const addOpt = document.createElement('option');
+            addOpt.value = "_ADD_NEW_";
+            addOpt.textContent = "+ Add New Customer...";
+            select.appendChild(addOpt);
+
+            if (selectedId && customersList.some(c => c.id === selectedId)) {
+                select.value = selectedId;
+            } else if (customersList.length > 0) {
+                select.value = customersList[0].id;
+            }
+
+            onCustomerSelect(select.value);
+        }
+
+        function onCustomerSelect(val) {
+            if (val === "_ADD_NEW_") {
+                openAddCustomerModal();
+                return;
+            }
+
+            const c = customersList.find(item => item.id === val);
+            if (!c) return;
+
+            document.getElementById('disp-c-phone').textContent = c.phone || '-';
+            document.getElementById('disp-c-address').textContent = c.address || '-';
+            
+            // Auto-fill tax type
+            document.getElementById('inv-gst-type').value = c.taxType || 'intra';
+
+            calculateInvoice();
+        }
+
+        function openAddCustomerModal() {
+            document.getElementById('new-c-name').value = '';
+            document.getElementById('new-c-phone').value = '';
+            document.getElementById('new-c-address').value = '';
+            document.getElementById('new-c-tax').value = 'intra';
+            document.getElementById('customer-modal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('new-c-name').focus(), 100);
+        }
+
+        function closeAddCustomerModal() {
+            document.getElementById('customer-modal').classList.add('hidden');
+            const select = document.getElementById('customer-select');
+            if (select.value === "_ADD_NEW_") {
+                select.value = customersList[0]?.id || '';
+                onCustomerSelect(select.value);
+            }
+        }
+
+        function saveNewCustomer() {
+            const name = document.getElementById('new-c-name').value.trim();
+            const phone = document.getElementById('new-c-phone').value.trim();
+            const address = document.getElementById('new-c-address').value.trim();
+            const taxType = document.getElementById('new-c-tax').value;
+
+            if (!name) {
+                alert("Please enter customer name");
+                return;
+            }
+
+            const newCust = {
+                id: "cust-" + Date.now(),
+                name,
+                phone: phone || "7013801913",
+                address: address || "Karnataka",
+                taxType
+            };
+
+            customersList.push(newCust);
+            localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(customersList));
+            closeAddCustomerModal();
+            populateCustomerDropdown(newCust.id);
+            showToast(`Customer "${name}" added!`, "success");
+        }
+
+        // Dynamic Monthly Invoice Number Format (TBC-MMM-XXX with Auto-Increment)
+        function getMonthYearMeta(dateString) {
+            try {
+                const d = new Date(dateString || new Date());
+                if (isNaN(d.getTime())) {
+                    const now = new Date();
+                    const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+                    return { mmm: monthNames[now.getMonth()], year: now.getFullYear() };
+                }
+                const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+                return { mmm: monthNames[d.getMonth()], year: d.getFullYear() };
+            } catch (e) {
+                return { mmm: "OCT", year: 2026 };
+            }
+        }
+
+        function getSequenceKey(dateString) {
+            const { mmm, year } = getMonthYearMeta(dateString);
+            return `TBC_SEQ_${mmm}_${year}`;
+        }
+
+        function getNextInvoiceNumber(dateString) {
+            const { mmm } = getMonthYearMeta(dateString);
+            const key = getSequenceKey(dateString);
+            let seq = parseInt(localStorage.getItem(key), 10);
+            if (isNaN(seq) || seq < 1) {
+                seq = 1;
+                localStorage.setItem(key, "1");
+            }
+            const padded = String(seq).padStart(3, '0');
+            return `TBC-${mmm}-${padded}`;
+        }
+
+        function incrementInvoiceSequence(dateString) {
+            const key = getSequenceKey(dateString);
+            let seq = parseInt(localStorage.getItem(key), 10);
+            if (isNaN(seq) || seq < 1) seq = 1;
+            const nextSeq = seq + 1;
+            localStorage.setItem(key, String(nextSeq));
+            const { mmm } = getMonthYearMeta(dateString);
+            return `TBC-${mmm}-${String(nextSeq).padStart(3, '0')}`;
+        }
+
+        // Initialize Default Bill details
+        function initDefaultBill() {
+            const today = new Date().toISOString().split('T')[0];
+            const invDateEl = document.getElementById('inv-date');
+            invDateEl.value = today;
+            document.getElementById('inv-number').value = getNextInvoiceNumber(today);
+        }
+
+        function onDateChanged() {
+            const invDate = document.getElementById('inv-date').value;
+            // Automatically update prefix and fetch the next invoice number for that specific month
+            document.getElementById('inv-number').value = getNextInvoiceNumber(invDate);
+            updatePreview();
+            calculateInvoice();
+        }
+
+        // Render line item rows: Item Dropdown + Editable Qty & Rate only
+        function renderItemForms() {
+            const container = document.getElementById('item-form-container');
+            container.innerHTML = '';
+
+            invoiceItems.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = "bg-slate-50 p-2.5 rounded-xl border border-slate-200 relative";
+                
+                div.innerHTML = `
+                    <div class="flex items-center justify-between mb-1.5">
+                        <span class="text-[10px] font-bold text-slate-400 uppercase">Item #${index + 1}</span>
+                        ${invoiceItems.length > 1 ? `
+                            <button type="button" onclick="removeItem(${index})" class="text-[11px] font-bold text-red-500 hover:text-red-700">&#x2715; Remove</button>
+                        ` : ''}
+                    </div>
+
+                    <div class="space-y-2">
+                        <!-- Control 1: Item Name (Bamboo Mora) -->
+                        <div>
+                            <label class="block text-[9px] font-bold uppercase text-slate-400 mb-0.5">Item Name</label>
+                            <select onchange="onItemDropdownChange(${index}, this.value)" class="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                <option value="Bamboo Mora" selected>Bamboo Mora</option>
+                            </select>
+                        </div>
+
+                        <!-- Controls 2 & 3: Qty and Rate -->
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-[9px] font-bold uppercase text-slate-400 mb-0.5">Qty</label>
+                                <input type="number" min="1" step="any" value="${item.qty}" oninput="updateItemField(${index}, 'qty', this.value)" class="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                            </div>
+                            <div>
+                                <label class="block text-[9px] font-bold uppercase text-slate-400 mb-0.5">Rate (&#x20B9;)</label>
+                                <input type="number" min="0" step="any" value="${item.rate}" oninput="updateItemField(${index}, 'rate', this.value)" class="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function onItemDropdownChange(index, val) {
+            invoiceItems[index].name = "Bamboo Mora";
+            renderItemForms();
+            calculateInvoice();
+        }
+
+        function addInvoiceItem() {
+            invoiceItems.push({ name: "Bamboo Mora", qty: 2, rate: 2000 });
+            renderItemForms();
+            calculateInvoice();
+        }
+
+        function removeItem(index) {
+            if (invoiceItems.length === 1) return;
+            invoiceItems.splice(index, 1);
+            renderItemForms();
+            calculateInvoice();
+        }
+
+        function updateItemField(index, field, val) {
+            invoiceItems[index][field] = field === 'name' ? val : Number(val);
+            calculateInvoice();
+        }
+
+        // Calculation & Live Preview Rendering
+        function calculateInvoice() {
+            const gstType = document.getElementById('inv-gst-type').value;
+            const tableBody = document.getElementById('p-table-body');
+            tableBody.innerHTML = '';
+
+            let subtotal = 0;
+            let totalTax = 0;
+
+            const isIntra = gstType === 'intra';
+            document.getElementById('p-th-tax').textContent = isIntra ? "CGST + SGST" : "IGST";
+
+            invoiceItems.forEach(item => {
+                const qty = Number(item.qty) || 0;
+                const rate = Number(item.rate) || 0;
+                const rawTotal = qty * rate;
+                // Hardcoded 5% GST for all bamboo craft items
+                const taxVal = rawTotal * 0.05;
+                const rowTotal = rawTotal + taxVal;
+
+                subtotal += rawTotal;
+                totalTax += taxVal;
+
+                const tr = document.createElement('tr');
+                tr.className = "border-b border-slate-100 font-medium";
+
+                let taxSplit = '';
+                if (isIntra) {
+                    const halfTax = (taxVal / 2).toFixed(2);
+                    taxSplit = `<div class="text-[10px] text-slate-400 font-mono">C: 2.5% (\u20B9${halfTax})</div><div class="text-[10px] text-slate-400 font-mono">S: 2.5% (\u20B9${halfTax})</div>`;
+                } else {
+                    taxSplit = `<span class="font-mono text-slate-600">5.0% (\u20B9${taxVal.toFixed(2)})</span>`;
+                }
+
+                tr.innerHTML = `
+                    <td class="p-2.5 font-bold text-slate-900">${item.name || 'Bamboo Item'}</td>
+                    <td class="p-2.5 text-right font-mono text-slate-700">${qty}</td>
+                    <td class="p-2.5 text-right font-mono text-slate-700">\u20B9${rate.toFixed(2)}</td>
+                    <td class="p-2.5 text-right font-mono text-slate-600">5%</td>
+                    <td class="p-2.5 text-right">${taxSplit}</td>
+                    <td class="p-2.5 text-right font-mono font-bold text-slate-900">\u20B9${rowTotal.toFixed(2)}</td>
+                `;
+                tableBody.appendChild(tr);
+            });
+
+            const grandTotal = Math.round(subtotal + totalTax);
+
+            // Update Quick bar
+            document.getElementById('quick-subtotal').textContent = `\u20B9${subtotal.toFixed(2)}`;
+            document.getElementById('quick-tax').textContent = `\u20B9${totalTax.toFixed(2)}`;
+            document.getElementById('quick-tax-label').textContent = isIntra ? "CGST (2.5%) + SGST (2.5%):" : "IGST (5%):";
+            document.getElementById('quick-total').textContent = `\u20B9${grandTotal.toFixed(2)}`;
+
+            // Update A4 Preview breakdown
+            document.getElementById('p-subtotal').textContent = `\u20B9${subtotal.toFixed(2)}`;
+            if (isIntra) {
+                document.getElementById('p-cgst-row').classList.remove('hidden');
+                document.getElementById('p-sgst-row').classList.remove('hidden');
+                document.getElementById('p-igst-row').classList.add('hidden');
+                document.getElementById('p-cgst').textContent = `\u20B9${(totalTax / 2).toFixed(2)}`;
+                document.getElementById('p-sgst').textContent = `\u20B9${(totalTax / 2).toFixed(2)}`;
+            } else {
+                document.getElementById('p-cgst-row').classList.add('hidden');
+                document.getElementById('p-sgst-row').classList.add('hidden');
+                document.getElementById('p-igst-row').classList.remove('hidden');
+                document.getElementById('p-igst').textContent = `\u20B9${totalTax.toFixed(2)}`;
+            }
+            document.getElementById('p-total').textContent = `\u20B9${grandTotal.toFixed(2)}`;
+            document.getElementById('p-amt-words').textContent = numberToIndianWords(grandTotal) + " Rupees Only";
+
+            updatePreview();
+        }
+
+        function updatePreview() {
+            const invNum = document.getElementById('inv-number').value.trim() || 'TBC-OCT-001';
+            const invDate = document.getElementById('inv-date').value || new Date().toISOString().split('T')[0];
+
+            document.getElementById('p-inv-number').textContent = invNum;
+            document.getElementById('p-inv-date').textContent = invDate;
+
+            // Get selected customer
+            const custId = document.getElementById('customer-select').value;
+            const cust = customersList.find(c => c.id === custId) || DEFAULT_CUSTOMERS[0];
+
+            document.getElementById('p-c-name').textContent = cust.name;
+            document.getElementById('p-c-address').textContent = cust.address;
+            document.getElementById('p-c-phone').textContent = "Ph: " + cust.phone;
+
+            const isIntra = document.getElementById('inv-gst-type').value === 'intra';
+            document.getElementById('p-place-supply').textContent = isIntra ? "Karnataka (29)" : "Inter-State";
+        }
+
+        function numberToIndianWords(num) {
+            if (num === 0) return 'Zero';
+            const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
+            const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+            
+            function g(n) {
+                if (n < 20) return a[n];
+                return b[Math.floor(n / 10)] + (n % 10 !== 0 ? ' ' + a[n % 10] : '');
+            }
+            
+            let str = '';
+            let c = Math.floor(num / 10000000); 
+            num %= 10000000;
+            if (c > 0) str += g(c) + ' Crore ';
+            
+            let l = Math.floor(num / 100000); 
+            num %= 100000;
+            if (l > 0) str += g(l) + ' Lakh ';
+            
+            let t = Math.floor(num / 1000); 
+            num %= 1000;
+            if (t > 0) str += g(t) + ' Thousand ';
+            
+            let h = Math.floor(num / 100); 
+            num %= 100;
+            if (h > 0) str += g(h) + ' Hundred ';
+            
+            if (num > 0) {
+                if (str !== '') str += 'and ';
+                str += g(num);
+            }
+            return str.trim();
+        }
+
+        function getMonthTabName(dateString) {
+            try {
+                const d = new Date(dateString || new Date());
+                const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                return `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+            } catch(e) {
+                return "Oct 2026";
+            }
+        }
+
+        function formatINR(val) {
+            const num = Number(val) || 0;
+            return '\u20B9' + num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        // =========================================================
+        // GOOGLE SHEETS & PDF EXPORT ENGINE
+        // =========================================================
+
+        // Save Current Invoice to Google Sheets
+        async function saveToGoogleSheets(silent = false) {
+            const saveOnlyBtn = document.getElementById('save-only-btn');
+            const saveOnlyText = document.getElementById('save-only-text');
+
+            const invDate = document.getElementById('inv-date').value || new Date().toISOString().split('T')[0];
+            const invNumber = document.getElementById('inv-number').value.trim() || getNextInvoiceNumber(invDate);
+
+            const custId = document.getElementById('customer-select').value;
+            const cust = customersList.find(c => c.id === custId) || DEFAULT_CUSTOMERS[0];
+            const cName = cust.name;
+            const cGst = "URP"; // Permanently hardcoded as URP as requested
+            const cPhone = cust.phone;
+            const cAddress = cust.address;
+
+            const isIntra = document.getElementById('inv-gst-type').value === 'intra';
+
+            let subtotal = 0;
+            let totalTax = 0;
+            const itemsSummaryArr = [];
+
+            invoiceItems.forEach(item => {
+                const qty = Number(item.qty) || 0;
+                const rate = Number(item.rate) || 0;
+                const raw = qty * rate;
+                const tax = raw * 0.05;
+                subtotal += raw;
+                totalTax += tax;
+                itemsSummaryArr.push(`${item.name || 'Bamboo Item'} (x${qty})`);
+            });
+
+            const itemsSummary = itemsSummaryArr.join(", ");
+            const cgst = isIntra ? Number((totalTax / 2).toFixed(2)) : 0;
+            const sgst = isIntra ? Number((totalTax / 2).toFixed(2)) : 0;
+            const igst = isIntra ? 0 : Number(totalTax.toFixed(2));
+            const grandTotal = Math.round(subtotal + totalTax);
+
+            const monthTab = getMonthTabName(invDate);
+
+            // Exact requested POST payload
+            const payload = {
+                invNumber,
+                invDate,
+                cName,
+                cGst: "URP",
+                cPhone,
+                cAddress,
+                itemsSummary,
+                subtotal,
+                cgst,
+                sgst,
+                igst,
+                totalTax,
+                grandTotal
+            };
+
+            // Keep in local cache for instant UI availability with Column S (Total Combined Tax)
+            const localRecord = {
+                ...payload,
+                month: monthTab,
+                salesTax: totalTax,
+                transportTax: 0,
+                totalCombinedTax: totalTax, // Col S = Col M (salesTax) + Col R (transportTax)
+                items: JSON.parse(JSON.stringify(invoiceItems)),
+                savedAt: new Date().toISOString()
+            };
+            storeLocalInvoice(localRecord);
+
+            if (saveOnlyBtn && !silent) {
+                saveOnlyBtn.disabled = true;
+                saveOnlyText.textContent = "Saving...";
+            }
+
+            try {
+                await fetch(SHEETS_WEB_APP_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "text/plain;charset=utf-8" },
+                    body: JSON.stringify(payload)
+                });
+            } catch (err) {
+                console.warn("Sheets fetch notice:", err);
+            } finally {
+                if (saveOnlyBtn) {
+                    saveOnlyBtn.disabled = false;
+                    saveOnlyText.textContent = "Save Only";
+                }
+                // Immediately increment sequence number by 1 and update invoice number input field to the next number
+                const nextInvNum = incrementInvoiceSequence(invDate);
+                document.getElementById('inv-number').value = nextInvNum;
+                calculateInvoice();
+                showToast(`Saved ${invNumber} to ${monthTab} tab \u2713. Next: ${nextInvNum}`, "success");
+            }
+        }
+
+        // Primary Mobile Action: "Save to Sheets & Download PDF"
+        async function saveToSheetsAndDownloadPDF() {
+            const btn = document.getElementById('save-and-download-btn');
+            const btnText = document.getElementById('save-pdf-text');
+            const btnIcon = document.getElementById('save-pdf-icon');
+
+            // Capture the current invoice number BEFORE saving (save increments it)
+            const pdfInvNumber = document.getElementById('inv-number').value.trim() || 'invoice';
+
+            if (btn) {
+                btn.disabled = true;
+                btnText.textContent = "Processing...";
+                btnIcon.textContent = "\u23F3";
+            }
+
+            // 1. Auto-save to Google Sheets as required
+            await saveToGoogleSheets(true);
+
+            // 2. Download Crisp A4 PDF using the ORIGINAL invoice number
+            await generateAndDownloadA4PDF(pdfInvNumber);
+
+            if (btn) {
+                btn.disabled = false;
+                btnText.textContent = "Save & Download PDF";
+                btnIcon.textContent = "\uD83D\uDCE5";
+            }
+        }
+
+        // Generate full-res crisp A4 PDF using hidden clean clone host
+        async function generateAndDownloadA4PDF(overrideInvNumber) {
+            const source = document.getElementById('invoice-preview');
+            const invNum = (overrideInvNumber || document.getElementById('inv-number').value || 'invoice').replace(/[\\/:*?"<>|]+/g, '-').trim();
+
+            if (typeof html2pdf === 'undefined') {
+                alert("PDF engine loading. Please try again.");
+                return;
+            }
+
+            // Create off-screen clone host at 100% scale (no mobile scale transform)
+            const exportHost = document.createElement('div');
+            exportHost.style.position = 'fixed';
+            exportHost.style.left = '-99999px';
+            exportHost.style.top = '0';
+            exportHost.style.width = '210mm';
+            exportHost.style.background = '#ffffff';
+            exportHost.style.zIndex = '-9999';
+
+            const clone = source.cloneNode(true);
+            clone.style.transform = 'none';
+            clone.style.margin = '0';
+            clone.style.boxShadow = 'none';
+            clone.style.minHeight = '285mm';
+            clone.style.maxHeight = '295mm';
+            clone.style.overflow = 'visible';
+            clone.classList.add('invoice-output-copy');
+
+            exportHost.appendChild(clone);
+            document.body.appendChild(exportHost);
+
+            try {
+                if (document.fonts && document.fonts.ready) {
+                    await document.fonts.ready;
+                }
+
+                const options = {
+                    margin: [0, 0, 2, 0],
+                    filename: `${invNum}.pdf`,
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: {
+                        scale: 2,
+                        useCORS: true,
+                        allowTaint: true,
+                        backgroundColor: '#ffffff',
+                        logging: false
+                    },
+                    jsPDF: {
+                        unit: 'mm',
+                        format: 'a4',
+                        orientation: 'portrait',
+                        compress: true
+                    },
+                    pagebreak: { mode: ['css'], avoid: ['tr'] }
+                };
+
+                await html2pdf().set(options).from(clone).save();
+                showToast(`Downloaded ${invNum}.pdf \u2713`, "success");
+            } catch (err) {
+                console.error("PDF export error:", err);
+                alert("PDF export encountered an issue. Printing will open instead.");
+                window.print();
+            } finally {
+                exportHost.remove();
+            }
+        }
+
+        // Store invoice in localStorage
+        function storeLocalInvoice(inv) {
+            let list = getLocalInvoices();
+            list = list.filter(item => item.invNumber !== inv.invNumber);
+            list.unshift(inv);
+            localStorage.setItem(SAVED_INVOICES_KEY, JSON.stringify(list));
+        }
+
+        function getLocalInvoices() {
+            try {
+                const raw = localStorage.getItem(SAVED_INVOICES_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed)) {
+                        return parsed;
+                    }
+                }
+            } catch(e){}
+            return [];
+        }
+
+        function showToast(message, type = 'success') {
+            const banner = document.getElementById('toast-banner');
+            const content = document.getElementById('toast-content');
+            const icon = document.getElementById('toast-icon');
+            const msgEl = document.getElementById('toast-message');
+
+            msgEl.textContent = message;
+            if (type === 'success') {
+                content.className = "px-4 py-3 rounded-2xl shadow-xl flex items-center justify-between border text-xs font-bold bg-emerald-950 text-emerald-200 border-emerald-700 animate-toast";
+                icon.textContent = "\u2713";
+            } else if (type === 'error') {
+                content.className = "px-4 py-3 rounded-2xl shadow-xl flex items-center justify-between border text-xs font-bold bg-red-950 text-red-200 border-red-700 animate-toast";
+                icon.textContent = "\u2715";
+            } else {
+                content.className = "px-4 py-3 rounded-2xl shadow-xl flex items-center justify-between border text-xs font-bold bg-slate-900 text-slate-100 border-slate-700 animate-toast";
+                icon.textContent = "\u2139\uFE0F";
+            }
+
+            banner.classList.remove('hidden');
+            if (window.toastTimeout) clearTimeout(window.toastTimeout);
+            window.toastTimeout = setTimeout(hideToast, 4000);
+        }
+
+        function hideToast() {
+            document.getElementById('toast-banner').classList.add('hidden');
+        }
+
+        // =========================================================
+        // TAB SWITCHING LOGIC
+        // =========================================================
+        function switchTab(tab) {
+            const btnCreate = document.getElementById('tab-btn-create');
+            const btnTransport = document.getElementById('tab-btn-transport');
+            const tabCreate = document.getElementById('tab-create-bill');
+            const tabTransport = document.getElementById('tab-transport');
+            const bottomBar = document.getElementById('sticky-bottom-bar');
+
+            if (tab === 'create') {
+                btnCreate.className = "py-2 rounded-lg text-center transition-all bg-white text-emerald-900 shadow-sm";
+                btnTransport.className = "py-2 rounded-lg text-center transition-all text-emerald-200 hover:text-white";
+                tabCreate.classList.remove('hidden');
+                tabTransport.classList.add('hidden');
+                bottomBar.classList.remove('hidden');
+            } else {
+                btnTransport.className = "py-2 rounded-lg text-center transition-all bg-white text-emerald-900 shadow-sm";
+                btnCreate.className = "py-2 rounded-lg text-center transition-all text-emerald-200 hover:text-white";
+                tabCreate.classList.add('hidden');
+                tabTransport.classList.remove('hidden');
+                bottomBar.classList.add('hidden');
+            }
+        }
+
+        // =========================================================
+        // TRANSPORT ENTRY TAB - FULL LOGIC
+        // =========================================================
+        let transportInvoicesCache = [];
+
+        // Google Sheets public ID for direct CSV reading
+        const GSHEET_ID = '1V6loraO_LvVCZDdJ8ky24aHURZuceDmgicdESns6SbY';
+
+        /**
+         * Build list of month tab names to try (current + previous 5 months).
+         */
+        function getMonthTabsToTry() {
+            const tabs = [];
+            const now = new Date();
+            for (let i = 0; i < 6; i++) {
+                const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+                tabs.push(monthNames[d.getMonth()] + ' ' + d.getFullYear());
+            }
+            return tabs;
+        }
+
+        /**
+         * Parse a CSV string into an array of arrays.
+         * Handles quoted fields with commas and newlines inside.
+         */
+        function parseCSV(text) {
+            const rows = [];
+            let row = [];
+            let field = '';
+            let inQuotes = false;
+
+            for (let i = 0; i < text.length; i++) {
+                const ch = text[i];
+                const next = text[i + 1];
+
+                if (inQuotes) {
+                    if (ch === '"' && next === '"') {
+                        field += '"';
+                        i++; // skip escaped quote
+                    } else if (ch === '"') {
+                        inQuotes = false;
+                    } else {
+                        field += ch;
+                    }
+                } else {
+                    if (ch === '"') {
+                        inQuotes = true;
+                    } else if (ch === ',') {
+                        row.push(field);
+                        field = '';
+                    } else if (ch === '\n') {
+                        row.push(field);
+                        field = '';
+                        rows.push(row);
+                        row = [];
+                    } else if (ch === '\r') {
+                        // skip \r, handle \r\n
+                    } else {
+                        field += ch;
+                    }
+                }
+            }
+            // Last field/row
+            if (field || row.length > 0) {
+                row.push(field);
+                rows.push(row);
+            }
+            return rows;
+        }
+
+        /**
+         * Fetch CSV data from a specific Google Sheet tab using the public
+         * Visualization API. Works from file:// protocol (no CORS issues).
+         *
+         * Strategy: Try XHR first. If blocked by CORS (file://), fall back to
+         * Google Visualization JSON API via <script> tag injection (JSONP-style).
+         */
+        function fetchSheetTabCSV(tabName) {
+            const encodedTab = encodeURIComponent(tabName);
+
+            // Try XHR first (works on http://, may work on file://)
+            return new Promise((resolve, reject) => {
+                const url = 'https://docs.google.com/spreadsheets/d/' + GSHEET_ID +
+                    '/gviz/tq?tqx=out:csv&sheet=' + encodedTab + '&range=A4:S500';
+
+                const xhr = new XMLHttpRequest();
+                xhr.open('GET', url, true);
+                xhr.timeout = 15000;
+
+                xhr.onload = function() {
+                    if (xhr.status === 200) {
+                        resolve(xhr.responseText);
+                    } else {
+                        reject(new Error('HTTP ' + xhr.status));
+                    }
+                };
+                xhr.onerror = function() {
+                    reject(new Error('XHR blocked'));
+                };
+                xhr.ontimeout = function() {
+                    reject(new Error('Timeout'));
+                };
+
+                xhr.send();
+            }).catch(function() {
+                // Fallback: Use Google Visualization JSON API via <script> tag
+                // This always works from file:// because it loads as JavaScript
+                return fetchSheetTabViaScriptTag(tabName);
+            });
+        }
+
+        /**
+         * Fallback: Fetch sheet data via Google Visualization API JSON response
+         * using <script> tag injection. This works from file:// protocol.
+         * Returns CSV-formatted string so the rest of the code stays the same.
+         */
+        function fetchSheetTabViaScriptTag(tabName) {
+            return new Promise((resolve, reject) => {
+                const encodedTab = encodeURIComponent(tabName);
+                const callbackName = '_gvizCb_' + Math.random().toString(36).substr(2, 9);
+                let done = false;
+
+                const timer = setTimeout(function() {
+                    if (!done) { done = true; cleanup(); reject(new Error('Script timeout for ' + tabName)); }
+                }, 15000);
+
+                // Google Visualization API returns: google.visualization.Query.setResponse({...})
+                // We use tqx=responseHandler:CALLBACK to get our own callback name
+                window[callbackName] = function(response) {
+                    if (done) return;
+                    done = true;
+                    clearTimeout(timer);
+                    cleanup();
+
+                    try {
+                        if (response.status === 'error') {
+                            reject(new Error(response.errors ? response.errors[0].detailed_message : 'Sheet error'));
+                            return;
+                        }
+
+                        // Convert the Google Visualization DataTable JSON to CSV-like rows
+                        const table = response.table;
+                        if (!table || !table.rows || table.rows.length === 0) {
+                            resolve(''); // empty tab
+                            return;
+                        }
+
+                        const csvRows = [];
+                        // Build header from cols
+                        const headerCells = table.cols.map(function(c) { return '"' + (c.label || c.id || '').replace(/"/g, '""') + '"'; });
+                        csvRows.push(headerCells.join(','));
+
+                        // Build data rows
+                        table.rows.forEach(function(row) {
+                            const cells = row.c.map(function(cell) {
+                                if (!cell || cell.v === null || cell.v === undefined) return '';
+                                var val = String(cell.v);
+                                // Escape for CSV
+                                if (val.indexOf(',') >= 0 || val.indexOf('"') >= 0 || val.indexOf('\n') >= 0) {
+                                    return '"' + val.replace(/"/g, '""') + '"';
+                                }
+                                return val;
+                            });
+                            csvRows.push(cells.join(','));
+                        });
+
+                        resolve(csvRows.join('\n'));
+                    } catch (e) {
+                        reject(e);
+                    }
+                };
+
+                const script = document.createElement('script');
+                script.async = true;
+                script.src = 'https://docs.google.com/spreadsheets/d/' + GSHEET_ID +
+                    '/gviz/tq?tqx=responseHandler:' + callbackName +
+                    '&sheet=' + encodedTab + '&range=A4:S500';
+
+                script.onerror = function() {
+                    if (!done) { done = true; clearTimeout(timer); cleanup(); reject(new Error('Script load error for ' + tabName)); }
+                };
+
+                function cleanup() {
+                    delete window[callbackName];
+                    if (script.parentNode) script.parentNode.removeChild(script);
+                }
+
+                document.head.appendChild(script);
+            });
+        }
+
+        /**
+         * Fetch invoices directly from Google Sheets public CSV API.
+         * No Apps Script deployment needed — reads the sheet directly.
+         *
+         * Sheet columns (row 4 = headers, data starts row 5):
+         *  A(0)=SN, B(1)=InvNo, C(2)=Date, D(3)=Customer, E(4)=GSTIN,
+         *  F(5)=Phone, G(6)=Address, H(7)=Items, I(8)=Subtotal,
+         *  J(9)=CGST, K(10)=SGST, L(11)=IGST, M(12)=TotalTax,
+         *  N(13)=GrandTotal, O(14)=TransportBill, P(15)=TransportCGST,
+         *  Q(16)=TransportSGST, R(17)=TransportTotalTax, S(18)=TotalTaxToPay
+         */
+        async function fetchTransportInvoices() {
+            const statusEl = document.getElementById('transport-fetch-status');
+            const refreshBtn = document.getElementById('transport-refresh-btn');
+            const refreshIcon = document.getElementById('transport-refresh-icon');
+            const selectEl = document.getElementById('transport-invoice-select');
+
+            refreshBtn.disabled = true;
+            refreshIcon.textContent = '\u23F3';
+            statusEl.textContent = 'Fetching invoices from Google Sheets...';
+            statusEl.className = 'text-[10px] text-amber-600 mt-1.5 font-semibold';
+
+            try {
+                const tabsToTry = getMonthTabsToTry();
+                const allInvoices = [];
+
+                console.log('[Transport] Trying tabs:', tabsToTry);
+
+                for (const tabName of tabsToTry) {
+                    try {
+                        console.log('[Transport] Fetching tab:', tabName);
+                        const csvText = await fetchSheetTabCSV(tabName);
+
+                        if (!csvText || csvText.trim().length === 0) {
+                            console.log('[Transport] Tab', tabName, 'is empty, skipping');
+                            continue;
+                        }
+
+                        const rows = parseCSV(csvText.trim());
+
+                        // Skip header row (row 0 = row 4 in sheet = headers)
+                        for (let r = 1; r < rows.length; r++) {
+                            const cols = rows[r];
+                            // Must have at least column B (invoice number)
+                            const invNumber = (cols[1] || '').trim();
+                            if (!invNumber) continue; // skip blank rows
+
+                            const transportBill = (cols[14] || '').trim();
+                            const transportCGST = (cols[15] || '').trim();
+                            const transportSGST = (cols[16] || '').trim();
+
+                            // Check if transport data is filled
+                            const hasTransportData = transportBill !== '' && Number(transportBill) > 0;
+
+                            allInvoices.push({
+                                monthTab: tabName,
+                                rowIndex: r + 4, // actual row in sheet (row 4=header, data starts 5)
+                                invNumber: invNumber,
+                                invDate: (cols[2] || '').trim(),
+                                cName: (cols[3] || '').trim(),
+                                cGst: (cols[4] || '').trim(),
+                                cPhone: (cols[5] || '').trim(),
+                                cAddress: (cols[6] || '').trim(),
+                                itemsSummary: (cols[7] || '').trim(),
+                                subtotal: Number(cols[8]) || 0,
+                                cgst: Number(cols[9]) || 0,
+                                sgst: Number(cols[10]) || 0,
+                                igst: Number(cols[11]) || 0,
+                                totalTax: Number(cols[12]) || 0,
+                                grandTotal: Number(cols[13]) || 0,
+                                transportFreight: Number(transportBill) || 0,
+                                transportCgst: Number(transportCGST) || 0,
+                                transportSgst: Number(transportSGST) || 0,
+                                transportTax: (Number(transportCGST) || 0) + (Number(transportSGST) || 0),
+                                hasTransportData: hasTransportData
+                            });
+                        }
+
+                        console.log('[Transport] Tab', tabName, ':', rows.length - 1, 'data rows found');
+                    } catch (tabErr) {
+                        console.warn('[Transport] Could not load tab "' + tabName + '":', tabErr.message);
+                        // Tab might not exist — that's OK, just skip it
+                    }
+                }
+
+                // Process results
+                const pendingInvoices = allInvoices.filter(inv => !inv.hasTransportData);
+                transportInvoicesCache = pendingInvoices;
+
+                selectEl.innerHTML = '';
+
+                if (allInvoices.length === 0) {
+                    const opt = document.createElement('option');
+                    opt.value = '';
+                    opt.textContent = '-- No invoices found in Sheets --';
+                    selectEl.appendChild(opt);
+                    statusEl.textContent = 'No invoices found. Make sure the Google Sheet has data.';
+                    statusEl.className = 'text-[10px] text-amber-600 mt-1.5 font-semibold';
+                } else if (pendingInvoices.length === 0) {
+                    const opt = document.createElement('option');
+                    opt.value = '';
+                    opt.textContent = '\u2705 All invoices have transport data!';
+                    selectEl.appendChild(opt);
+                    statusEl.textContent = 'Fetched ' + allInvoices.length + ' invoices. All have transport data filled.';
+                    statusEl.className = 'text-[10px] text-emerald-600 mt-1.5 font-semibold';
+                } else {
+                    const placeholder = document.createElement('option');
+                    placeholder.value = '';
+                    placeholder.textContent = '-- Select from ' + pendingInvoices.length + ' pending invoice(s) --';
+                    selectEl.appendChild(placeholder);
+
+                    pendingInvoices.forEach(inv => {
+                        const opt = document.createElement('option');
+                        opt.value = inv.invNumber;
+                        opt.textContent = inv.invNumber + '  \u2022  ' + inv.cName + '  \u2022  \u20B9' + Number(inv.grandTotal || 0).toLocaleString('en-IN');
+                        selectEl.appendChild(opt);
+                    });
+
+                    statusEl.textContent = '\u2713 ' + pendingInvoices.length + ' invoice(s) pending transport data (of ' + allInvoices.length + ' total).';
+                    statusEl.className = 'text-[10px] text-emerald-600 mt-1.5 font-semibold';
+                }
+
+                const filledInvoices = allInvoices.filter(inv => inv.hasTransportData);
+                renderFilledTransportList(filledInvoices);
+
+                document.getElementById('transport-invoice-details').classList.add('hidden');
+                document.getElementById('transport-form-section').classList.add('hidden');
+
+                if (allInvoices.length > 0) {
+                    showToast('Fetched ' + allInvoices.length + ' invoices. ' + pendingInvoices.length + ' need transport data.', 'success');
+                }
+
+            } catch (err) {
+                console.error('Transport fetch error:', err);
+                selectEl.innerHTML = '<option value="">-- Error fetching. Try again. --</option>';
+                statusEl.textContent = '\u274C Error: ' + err.message;
+                statusEl.className = 'text-[10px] text-red-600 mt-1.5 font-semibold';
+                showToast('Failed to fetch invoices. Check connection.', 'error');
+            } finally {
+                refreshBtn.disabled = false;
+                refreshIcon.textContent = '\uD83D\uDD04';
+            }
+        }
+
+        function onTransportInvoiceSelected() {
+            const selectEl = document.getElementById('transport-invoice-select');
+            const detailsEl = document.getElementById('transport-invoice-details');
+            const formEl = document.getElementById('transport-form-section');
+            const selectedValue = selectEl.value;
+
+            if (!selectedValue) {
+                detailsEl.classList.add('hidden');
+                formEl.classList.add('hidden');
+                return;
+            }
+
+            const inv = transportInvoicesCache.find(i => i.invNumber === selectedValue);
+            if (!inv) {
+                detailsEl.classList.add('hidden');
+                formEl.classList.add('hidden');
+                return;
+            }
+
+            document.getElementById('transport-inv-number').textContent = inv.invNumber;
+            document.getElementById('transport-inv-date').textContent = inv.invDate || '\u2014';
+            document.getElementById('transport-inv-customer').textContent = inv.cName || '\u2014';
+            document.getElementById('transport-inv-total').textContent = formatINR(inv.grandTotal || 0);
+
+            detailsEl.classList.remove('hidden');
+
+            document.getElementById('transport-bill-amount').value = '';
+            document.getElementById('transport-cgst-display').value = '0.00';
+            document.getElementById('transport-sgst-display').value = '0.00';
+            document.getElementById('transport-total-tax').textContent = '\u20B90.00';
+            formEl.classList.remove('hidden');
+
+            setTimeout(() => document.getElementById('transport-bill-amount').focus(), 100);
+        }
+
+        function calculateTransportTax() {
+            const billAmount = Number(document.getElementById('transport-bill-amount').value) || 0;
+            const cgst = billAmount * 0.025;
+            const sgst = billAmount * 0.025;
+            const totalTax = cgst + sgst;
+
+            document.getElementById('transport-cgst-display').value = cgst.toFixed(2);
+            document.getElementById('transport-sgst-display').value = sgst.toFixed(2);
+            document.getElementById('transport-total-tax').textContent = formatINR(totalTax);
+        }
+
+        async function saveTransportData() {
+            const selectEl = document.getElementById('transport-invoice-select');
+            const selectedInvNumber = selectEl.value;
+
+            if (!selectedInvNumber) {
+                showToast('Please select an invoice first.', 'error');
+                return;
+            }
+
+            // Check if transport URL is configured
+            if (!TRANSPORT_WEB_APP_URL || TRANSPORT_WEB_APP_URL === 'PASTE_YOUR_TRANSPORT_URL_HERE') {
+                showToast('Transport URL not configured. See setup instructions.', 'error');
+                return;
+            }
+
+            const inv = transportInvoicesCache.find(i => i.invNumber === selectedInvNumber);
+            if (!inv) {
+                showToast('Invoice not found in cache. Please re-fetch.', 'error');
+                return;
+            }
+
+            const billAmount = Number(document.getElementById('transport-bill-amount').value) || 0;
+            if (billAmount <= 0) {
+                showToast('Please enter a valid Transport Bill Amount.', 'error');
+                return;
+            }
+
+            const cgst = Number(document.getElementById('transport-cgst-display').value) || 0;
+            const sgst = Number(document.getElementById('transport-sgst-display').value) || 0;
+
+            const saveBtn = document.getElementById('transport-save-btn');
+            const saveText = document.getElementById('transport-save-text');
+            const saveIcon = document.getElementById('transport-save-icon');
+
+            saveBtn.disabled = true;
+            saveText.textContent = 'Saving...';
+            saveIcon.textContent = '\u23F3';
+
+            const payload = {
+                action: 'updateTransport',
+                monthTab: inv.monthTab || inv.month,
+                invNumber: selectedInvNumber,
+                transportFreight: billAmount,
+                transportCgst: cgst,
+                transportSgst: sgst
+            };
+
+            try {
+                await fetch(TRANSPORT_WEB_APP_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(payload)
+                });
+
+                transportInvoicesCache = transportInvoicesCache.filter(i => i.invNumber !== selectedInvNumber);
+
+                selectEl.innerHTML = '';
+                if (transportInvoicesCache.length === 0) {
+                    const opt = document.createElement('option');
+                    opt.value = '';
+                    opt.textContent = '\u2705 All invoices have transport data!';
+                    selectEl.appendChild(opt);
+                } else {
+                    const placeholder = document.createElement('option');
+                    placeholder.value = '';
+                    placeholder.textContent = '-- Select from ' + transportInvoicesCache.length + ' pending invoice(s) --';
+                    selectEl.appendChild(placeholder);
+
+                    transportInvoicesCache.forEach(i => {
+                        const opt = document.createElement('option');
+                        opt.value = i.invNumber;
+                        opt.textContent = i.invNumber + '  \u2022  ' + i.cName + '  \u2022  \u20B9' + Number(i.grandTotal || 0).toLocaleString('en-IN');
+                        selectEl.appendChild(opt);
+                    });
+                }
+
+                document.getElementById('transport-invoice-details').classList.add('hidden');
+                document.getElementById('transport-form-section').classList.add('hidden');
+
+                document.getElementById('transport-fetch-status').textContent =
+                    '\u2713 Saved transport for ' + selectedInvNumber + '. ' + transportInvoicesCache.length + ' remaining.';
+
+                showToast('\u2713 Transport saved for ' + selectedInvNumber + ' \u2014 \u20B9' + billAmount.toLocaleString('en-IN') + ' + tax \u20B9' + (cgst + sgst).toFixed(2), 'success');
+
+            } catch (err) {
+                console.error('Transport save error:', err);
+                showToast('Error saving transport data. Please try again.', 'error');
+            } finally {
+                saveBtn.disabled = false;
+                saveText.textContent = 'Save Transport to Sheets';
+                saveIcon.textContent = '\uD83D\uDCBE';
+            }
+        }
+
+        function renderFilledTransportList(filledInvoices) {
+            const section = document.getElementById('transport-filled-section');
+            const listEl = document.getElementById('transport-filled-list');
+            const countEl = document.getElementById('transport-filled-count');
+
+            if (!filledInvoices || filledInvoices.length === 0) {
+                section.classList.add('hidden');
+                return;
+            }
+
+            section.classList.remove('hidden');
+            countEl.textContent = filledInvoices.length;
+            listEl.innerHTML = '';
+
+            filledInvoices.forEach(inv => {
+                const row = document.createElement('div');
+                row.className = 'px-3.5 py-2.5 flex items-center justify-between';
+                row.innerHTML = '<div><span class="font-mono font-bold text-slate-800">' + inv.invNumber + '</span>' +
+                    '<span class="text-slate-400 ml-1">' + (inv.cName || '') + '</span></div>' +
+                    '<div class="text-right"><div class="font-bold text-amber-700">\u20B9' + Number(inv.transportFreight || 0).toLocaleString('en-IN') + '</div>' +
+                    '<div class="text-[10px] text-slate-400">Tax: \u20B9' + Number(inv.transportTax || 0).toFixed(2) + '</div></div>';
+                listEl.appendChild(row);
+            });
+        }
+    </script>
+
+</body>
+</html>
